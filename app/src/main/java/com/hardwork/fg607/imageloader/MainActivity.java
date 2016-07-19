@@ -49,6 +49,8 @@ public class MainActivity extends Activity implements AbsListView.OnScrollListen
 
     private static final Executor CACHED_THREAD_POOL = Executors.newCachedThreadPool();
 
+    private int mSpeedCheckSwitch = 0;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -117,35 +119,44 @@ public class MainActivity extends Activity implements AbsListView.OnScrollListen
     @Override
     public void onScroll(AbsListView view, final int firstVisibleItem, final int visibleItemCount, int totalItemCount) {
 
-        //用线程池处理大量线程的创建
-        CACHED_THREAD_POOL.execute(new Runnable() {
-            @Override
-            public void run() {
+        mSpeedCheckSwitch++;
 
-                //滚动速度较快时不更新item(防止快速滑动过程中产生大量的异步更新任务，导致卡顿)
-                if (mPreviousFirstVisibleItem != firstVisibleItem){
+        if(mSpeedCheckSwitch==2){
 
-                    long currTime = System.currentTimeMillis();
-                    long timeToScrollOneElement = currTime - mPreviousEventTime;
-                    mScrollSpeed = ((double)1/timeToScrollOneElement)*1000;
+            //用线程池处理大量线程的创建
+            CACHED_THREAD_POOL.execute(new Runnable() {
+                @Override
+                public void run() {
 
-                    mPreviousFirstVisibleItem = firstVisibleItem;
-                    mPreviousEventTime = currTime;
+                    //滚动速度较快时不更新item(防止快速滑动过程中产生大量的异步更新任务，导致卡顿)
+                    if (mPreviousFirstVisibleItem != firstVisibleItem){
 
-                    Log.d("DBG", "Speed: " +mScrollSpeed + " elements/second");
+                        long currTime = System.currentTimeMillis();
+                        long timeToScrollOneElement = currTime - mPreviousEventTime;
+                        mScrollSpeed = ((double)1/timeToScrollOneElement)*1000;
 
-                    if(mScrollSpeed>MAX_SCROLLING_SPEED){
+                        mPreviousFirstVisibleItem = firstVisibleItem;
+                        mPreviousEventTime = currTime;
 
-                        mIsGridViewIdle = false;
+                        Log.d("DBG", "Speed: " +mScrollSpeed + " elements/second");
 
-                    }else {
+                        if(mScrollSpeed>MAX_SCROLLING_SPEED){
 
-                        mIsGridViewIdle = true;
+                            mIsGridViewIdle = false;
 
+                        }else {
+
+                            mIsGridViewIdle = true;
+
+                        }
                     }
                 }
-            }
-        });
+            });
+
+            mSpeedCheckSwitch = 0;
+
+        }
+
 
     }
 
