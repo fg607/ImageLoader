@@ -24,6 +24,8 @@ import com.hardwork.fg607.imageloader.view.SquareImageView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity implements AbsListView.OnScrollListener{
 
@@ -39,9 +41,14 @@ public class MainActivity extends Activity implements AbsListView.OnScrollListen
     private boolean mIsWifiConnected = false;
     private boolean mCanGetBitmapFromNetwork = false;
 
-    private int previousFirstVisibleItem=0;
-    private long previousEventTime=0;
-    private double speed=0;
+    private int mPreviousFirstVisibleItem=0;
+    private long mPreviousEventTime=0;
+    private double mScrollSpeed=0;
+
+    private static final int MAX_SCROLLING_SPEED = 30;
+
+    private static final Executor CACHED_THREAD_POOL = Executors.newCachedThreadPool();
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -110,24 +117,27 @@ public class MainActivity extends Activity implements AbsListView.OnScrollListen
     @Override
     public void onScroll(AbsListView view, final int firstVisibleItem, final int visibleItemCount, int totalItemCount) {
 
-        new Thread(new Runnable() {
+        //用线程池处理大量线程的创建
+        CACHED_THREAD_POOL.execute(new Runnable() {
             @Override
             public void run() {
 
                 //滚动速度较快时不更新item(防止快速滑动过程中产生大量的异步更新任务，导致卡顿)
-                if (previousFirstVisibleItem != firstVisibleItem){
+                if (mPreviousFirstVisibleItem != firstVisibleItem){
 
                     long currTime = System.currentTimeMillis();
-                    long timeToScrollOneElement = currTime - previousEventTime;
-                    speed = ((double)1/timeToScrollOneElement)*1000;
+                    long timeToScrollOneElement = currTime - mPreviousEventTime;
+                    mScrollSpeed = ((double)1/timeToScrollOneElement)*1000;
 
-                    previousFirstVisibleItem = firstVisibleItem;
-                    previousEventTime = currTime;
-                    Log.d("DBG", "Speed: " +speed + " elements/second");
+                    mPreviousFirstVisibleItem = firstVisibleItem;
+                    mPreviousEventTime = currTime;
 
-                    if(speed>30){
+                    Log.d("DBG", "Speed: " +mScrollSpeed + " elements/second");
+
+                    if(mScrollSpeed>MAX_SCROLLING_SPEED){
 
                         mIsGridViewIdle = false;
+
                     }else {
 
                         mIsGridViewIdle = true;
@@ -135,7 +145,7 @@ public class MainActivity extends Activity implements AbsListView.OnScrollListen
                     }
                 }
             }
-        }).start();
+        });
 
     }
 
