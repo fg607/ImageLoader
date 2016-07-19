@@ -8,7 +8,9 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
+import android.view.GestureDetector;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AbsListView;
@@ -23,7 +25,7 @@ import com.hardwork.fg607.imageloader.view.SquareImageView;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends Activity implements AbsListView.OnScrollListener {
+public class MainActivity extends Activity implements AbsListView.OnScrollListener{
 
     private static final String TAG = "MainActivity";
 
@@ -37,6 +39,10 @@ public class MainActivity extends Activity implements AbsListView.OnScrollListen
     private boolean mIsWifiConnected = false;
     private boolean mCanGetBitmapFromNetwork = false;
 
+    private int previousFirstVisibleItem=0;
+    private long previousEventTime=0;
+    private double speed=0;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -44,6 +50,7 @@ public class MainActivity extends Activity implements AbsListView.OnScrollListen
 
         initData();
         initView();
+
 
         mImageLoader = ImageLoader.build(this);
 
@@ -60,33 +67,21 @@ public class MainActivity extends Activity implements AbsListView.OnScrollListen
 
     private void initData() {
 
-        String[] imageUrls = {
+        String baseUrl="http://192.168.8.102:8000/";
 
-                "http://192.168.8.102:8000/1460694199871.png",
-                "http://192.168.8.102:8000/20160407_075152.jpg",
-                "http://192.168.8.102:8000/20160407_075301.jpg",
-                "http://192.168.8.102:8000/20160410_194610.jpg",
-                "http://192.168.8.102:8000/20160410_194618.jpg",
-                "http://192.168.8.102:8000/20160707_090554.jpg",
-                "http://192.168.8.102:8000/2016_05_21_12_13_29.png",
-                "http://192.168.8.102:8000/2016_06_19_09_11_15.png",
-                "http://192.168.8.102:8000/clover.png",
-                "http://192.168.8.102:8000/DIY.png",
-                "http://192.168.8.102:8000/id1.jpg",
-                "http://192.168.8.102:8000/id2.jpg",
-                "http://192.168.8.102:8000/iphone.png",
-                "http://192.168.8.102:8000/screenshot.jpg",
-                "http://192.168.8.102:8000/Screenshot0.png",
-                "http://192.168.8.102:8000/screenshot1.jpg",
-                "http://192.168.8.102:8000/screenshot2.jpg",
-                "http://192.168.8.102:8000/screenshot3.jpg",
-                "http://192.168.8.102:8000/screenshot4.jpg",
-                "http://192.168.8.102:8000/screenshot5.jpg"
-        };
+        for (int i =0 ;i<46;i++){
 
-        for (String url : imageUrls) {
+            mUrlList.add(baseUrl+(i+1)+".png");
+        }
 
-            mUrlList.add(url);
+        for (int i =0 ;i<46;i++){
+
+            mUrlList.add(baseUrl+(i+1)+".png");
+        }
+
+        for (int i =0 ;i<46;i++){
+
+            mUrlList.add(baseUrl+(i+1)+".png");
         }
 
         int screenWidth = MyUtils.getScreenMetrics(this).widthPixels;
@@ -100,30 +95,58 @@ public class MainActivity extends Activity implements AbsListView.OnScrollListen
             mCanGetBitmapFromNetwork = true;
         }
     }
-
     @Override
     public void onScrollStateChanged(AbsListView view, int scrollState) {
 
+        //当滑动停止时更新可见item
         if (scrollState == AbsListView.OnScrollListener.SCROLL_STATE_IDLE) {
 
             mIsGridViewIdle = true;
             mImageAdapter.notifyDataSetChanged();
-        } else {
 
-            mIsGridViewIdle = false;
         }
     }
 
     @Override
-    public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
+    public void onScroll(AbsListView view, final int firstVisibleItem, final int visibleItemCount, int totalItemCount) {
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+
+                //滚动速度较快时不更新item(防止快速滑动过程中产生大量的异步更新任务，导致卡顿)
+                if (previousFirstVisibleItem != firstVisibleItem){
+
+                    long currTime = System.currentTimeMillis();
+                    long timeToScrollOneElement = currTime - previousEventTime;
+                    speed = ((double)1/timeToScrollOneElement)*1000;
+
+                    previousFirstVisibleItem = firstVisibleItem;
+                    previousEventTime = currTime;
+                    Log.d("DBG", "Speed: " +speed + " elements/second");
+
+                    if(speed>30){
+
+                        mIsGridViewIdle = false;
+                    }else {
+
+                        mIsGridViewIdle = true;
+
+                    }
+                }
+            }
+        }).start();
 
     }
+
 
     private class ImageAdapter extends BaseAdapter {
 
         private Context mContext;
 
         private LayoutInflater mInflater;
+
+        private static final int ONE_SCREEN_ITEMS = 18;
 
         public ImageAdapter(Context context) {
 
@@ -174,18 +197,33 @@ public class MainActivity extends Activity implements AbsListView.OnScrollListen
 
             String uri = getItem(position);
 
-            if (!uri.equals(tag)) {
+            /*if (!uri.equals(tag)) {
 
                 imageView.setImageDrawable(new ColorDrawable(Color.BLACK));
 
+            }*/
+
+
+            if(mCanGetBitmapFromNetwork){
+
+                if (mIsGridViewIdle) {
+
+                    imageView.setTag(uri);
+
+                    mImageLoader.bindBitmap(uri, imageView, mImageWidth, mImageWidth);
+
+                    //当滑动到最顶部和最底部时必须刷新
+                }else if(position<ONE_SCREEN_ITEMS||position>mUrlList.size()-ONE_SCREEN_ITEMS){
+
+
+                    imageView.setTag(uri);
+
+                    mImageLoader.bindBitmap(uri, imageView, mImageWidth, mImageWidth);
+
+                }
+
             }
 
-            if (mIsGridViewIdle && mCanGetBitmapFromNetwork) {
-
-                imageView.setTag(uri);
-
-                mImageLoader.bindBitmap(uri, imageView, mImageWidth, mImageWidth);
-            }
 
             return convertView;
 
